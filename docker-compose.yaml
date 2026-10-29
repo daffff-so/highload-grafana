@@ -56,6 +56,16 @@ services:
       GRAFANA_URL: http://grafana:3000
       GRAFANA_ADMIN_USER: ${GRAFANA_ADMIN_USER}
       GRAFANA_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+    volumes:
+      - ./generator:/generator:ro
+    command: [ "python", "/generator/generate_dashboard.py" ]
+    depends_on:
+      app-1:
+        condition: service_healthy
+      app-2:
+        condition: service_healthy
+      grafana:
+        condition: service_healthy
   load:
     image: python:3.12.12-slim
     restart: unless-stopped
