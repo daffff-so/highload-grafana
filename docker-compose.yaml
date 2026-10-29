@@ -1,4 +1,4 @@
-# Infrastructure starter. Metrics, generator and load tool are still TODO.
+# Items API, monitoring, dashboard generation and background load.
 x-app: &app
   image: highload-grafana-app:local
   build: .
