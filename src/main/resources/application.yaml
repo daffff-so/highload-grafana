@@ -1,0 +1,30 @@
+spring:
+  application:
+    name: highload-grafana
+
+app:
+  pod-id: ${POD_ID:local-1}
+  datacenter: ${DATACENTER:local}
+
+server:
+  port: 8080
+  error:
+    include-message: always
+
+management:
+  endpoints:
+    web:
+      base-path: /
+      exposure:
+        include: prometheus
+      path-mapping:
+        prometheus: metrics
+
+  metrics:
+    tags:
+      pod_id: ${app.pod-id}
+      datacenter: ${app.datacenter}
+
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true

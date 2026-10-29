@@ -1,0 +1,78 @@
+# Infrastructure starter. Metrics, generator and load tool are still TODO.
+x-app: &app
+  image: highload-grafana-app:local
+  build: .
+  restart: unless-stopped
+  healthcheck:
+    test: ["CMD", "java", "/app/Healthcheck.java"]
+    interval: 10s
+    timeout: 8s
+    retries: 12
+    start_period: 30s
+
+services:
+  app-1:
+    <<: *app
+    environment:
+      POD_ID: pod-1
+      DATACENTER: dc-1
+    ports: ["127.0.0.1:8081:8080"]
+  app-2:
+    <<: *app
+    environment:
+      POD_ID: pod-2
+      DATACENTER: dc-2
+    ports: ["127.0.0.1:8082:8080"]
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    ports: ["127.0.0.1:9090:9090"]
+    volumes:
+      - ./infra/prometheus/prometheus.yaml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    depends_on:
+      app-1: {condition: service_healthy}
+      app-2: {condition: service_healthy}
+  grafana:
+    image: grafana/grafana:12.2.0
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:?Copy .env.example to .env}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Copy .env.example to .env}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    ports: ["127.0.0.1:3000:3000"]
+    volumes:
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana-data:/var/lib/grafana
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    depends_on: [prometheus]
+  dashboard-generator:
+    image: python:3.12.12-slim
+    restart: "no"
+    environment:
+      APP_URL: http://app-1:8080
+      GRAFANA_URL: http://grafana:3000
+      GRAFANA_ADMIN_USER: ${GRAFANA_ADMIN_USER}
+      GRAFANA_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+  load:
+    image: python:3.12.12-slim
+    restart: unless-stopped
+    environment:
+      APP_URLS: http://app-1:8080,http://app-2:8080
+      TARGET_RPS: "30"
+      RAMP_SECONDS: "120"
+    volumes:
+      - ./load:/load:ro
+    command: ["python", "-u", "/load/load.py"]
+    depends_on:
+      app-1:
+        condition: service_healthy
+      app-2:
+        condition: service_healthy
+      dashboard-generator:
+        condition: service_completed_successfully
+volumes:
+  prometheus-data:
+  grafana-data:
